@@ -4,7 +4,8 @@
   "description": "Sign distribution of tokens on the XRPL based on a HTTP call",
   "main": "index.js",
   "scripts": {
-    "dev": "DEBUG=xrpldistr* nodemon index.js"
+    "dev": "DEBUG=xrpldistr* nodemon index.js",
+    "pm2": "DEBUG=xrpldistr* pm2 startOrReload pm2.config.js --env production --update-env"
   },
   "author": "Wietse Wind <hi@wietse.com>",
   "license": "MIT",
@@ -16,6 +17,7 @@
     "xrpl-client": "^1.9.1"
   },
   "devDependencies": {
-    "nodemon": "^2.0.12"
+    "nodemon": "^2.0.12",
+    "pm2": "^5.1.1"
   }
 }

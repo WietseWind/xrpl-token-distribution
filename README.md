@@ -72,5 +72,12 @@ npm run dev
 
 ## Run (production)
 
-Use e.g. pm2, or manually:
+#### Run manually:
+```
 DEBUG=xrpldistr* node .
+```
+
+#### Run (or reload) with PM2:
+```
+npm run pm2
+```
