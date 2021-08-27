@@ -45,6 +45,12 @@ const main = async () => {
 
       Object.assign(recent, { [account]: verbose })
 
+      setTimeout(() => {
+        if (Object.keys(recent).indexOf(account) > -1) {
+          delete recent[account]
+        }
+      }, Number(config?.localtxttl || 60) * 1000)
+
       logReq('Processing', verbose.send)
 
       // 1. Check if account exists (activated)
@@ -129,10 +135,6 @@ const main = async () => {
       res.json(verbose)
       
       logReq('Processing', verbose)
-
-      setTimeout(() => {
-        delete recent[account]
-      }, Number(config?.localtxttl || 60) * 1000)
 
       // 9. Submit the transaction
       logReq('Submitting transaction', signed.id)
