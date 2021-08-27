@@ -34,6 +34,34 @@ The following options are available:
 - `localtxttl=60` (default: 60)  
   The amount of seconds the same destination account cannot claim any more
 
+## Distribute & Status (endpoints)
+
+When this app is running (see Dev & Run chapters below), two endpoints are available:
+
+#### `/{account}/{amount}`
+
+Distribute `{amount}` to `{account}`
+
+##### Returns (OK): 
+```javascript
+{
+  "send": {...},
+  "faucet": {...},
+  "transaction": {...},
+  "txhash": "CAFEBABE..."
+}
+```
+
+##### Returns (Error):
+```javascript
+{
+  "error": "Some error message"
+}
+```
+
+#### `/status`
+
+Shows the current objects (not yet cleaned because of reaching the `localtxttl`) and their state and XRPL submit response.
 
 ## Dev:
 
