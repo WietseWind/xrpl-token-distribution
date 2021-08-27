@@ -1,5 +1,5 @@
 # Distribute tokens on the XRPL
-## HTTP backend to compose, sign & submit
+#### HTTP backend to compose, sign & submit
 
 This simple node backend allows for validating, composing, signing and
 submitting transactions to run a token faucet on the XRP Ledger.
