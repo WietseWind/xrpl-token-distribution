@@ -18,7 +18,11 @@ const recent = {}
 
 const main = async () => {
   log('Connecting to the XRPL')
-  const xrpl = await new XrplClient(config?.node || 'wss://xrplcluster.com')
+  const xrpl = await new XrplClient(config?.node || 'wss://xrplcluster.com', {
+    assumeOfflineAfterSeconds: 20,
+    maxConnectionAttempts: 4,
+    connectAttemptTimeoutSeconds: 4,
+  })
   xrpl.on('clusterinfo', i => log(`Connected to FH server: ${i.preferredServer}`))
 
   // await xrpl.ready()
