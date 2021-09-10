@@ -17,22 +17,22 @@ log(`Distributing\n > ${config.token}\nby\n > ${config.issuer}\nfrom\n > ${confi
 const recent = {}
 
 const main = async () => {
-  log('Connecting to the XRPL')
-  const xrpl = await new XrplClient(config?.node || 'wss://xrplcluster.com', {
-    assumeOfflineAfterSeconds: 20,
-    maxConnectionAttempts: 4,
-    connectAttemptTimeoutSeconds: 4,
-  })
-  xrpl.on('clusterinfo', i => log(`Connected to FH server: ${i.preferredServer}`))
-
-  // await xrpl.ready()
-
-  log('XRPL connection ready',
-    xrpl.getState().server.uri,
-    xrpl.getState().server.publicKey
-  )
-
   app.get('/:account(r[a-zA-Z0-9]{16,})/:amount([0-9.]{1,})', async (req, res) => {
+    log('Connecting to the XRPL')
+    const xrpl = await new XrplClient(config?.node || 'wss://xrplcluster.com', {
+      assumeOfflineAfterSeconds: 20,
+      maxConnectionAttempts: 4,
+      connectAttemptTimeoutSeconds: 4,
+    })
+    xrpl.on('clusterinfo', i => log(`Connected to FH server: ${i.preferredServer}`))
+   
+    xrpl.on('online', () => {
+      log('XRPL connection ready',
+        xrpl.getState().server.uri,
+        xrpl.getState().server.publicKey
+      )
+    })
+  
     try {
       const account = req.params.account
       const amount = Number(req.params.amount)
@@ -116,6 +116,9 @@ const main = async () => {
         : {}
 
       // 8. Compose & sign a transaction
+      await xrpl.ready()
+      // We need to wait so we know the last ledger
+
       const transaction = {
         TransactionType: 'Payment',
         Account: config.account,
@@ -149,6 +152,8 @@ const main = async () => {
       }
 
       logReq('TX Submit response', signed.id, submit)
+
+      return xrpl.close()
     } catch (e) {
       res.json({ error: e.message })
     }
