@@ -43,6 +43,13 @@ const processPayout = async (queueItem) => {
     }
   }, Number(config?.localtxttl || 60) * 1000)
 
+  const forcedClearTimeout = setTimeout(() => {
+    if (Object.keys(queue).indexOf(account) > -1) {
+      log('Force cleanup payout to ', account)
+      delete queue[account]
+    }
+  }, 60 * 1000)
+
   try {
 
     xrpl = await new XrplClient(config?.node || 'wss://xrplcluster.com', {
@@ -133,6 +140,7 @@ const processPayout = async (queueItem) => {
     log('Closed')
 
     delete queue[account]
+    clearTimeout(forcedClearTimeout)
     xrpl = undefined
   }
 
