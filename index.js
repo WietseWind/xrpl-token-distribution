@@ -29,7 +29,7 @@ setInterval(() => {
   } else {
     log('Queue empty')
   }
-}, 5000)
+}, Number(config?.secperqueueprocess || 9) * 1000)
 
 const processPayout = async (queueItem) => {
   let xrpl

@@ -33,6 +33,8 @@ The following options are available:
   The amount of drops transaction fee
 - `localtxttl=60` (default: 60)  
   The amount of seconds the same destination account cannot claim any more
+- `secperqueueprocess=9` (default: 9)  
+  The seconds between processing a queued payout
 
 ## Distribute & Status (endpoints)
 
