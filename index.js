@@ -16,23 +16,110 @@ log(`Distributing\n > ${config.token}\nby\n > ${config.issuer}\nfrom\n > ${confi
 
 const recent = {}
 const queue = {}
-
-setInterval(() => {
-  const keys = Object.keys(queue).filter(q => typeof queue[q].processing === 'undefined')
-  log('Processing queue')
-
-  if (keys.length > 0) {
-    const item = queue[keys[0]]
-    log('Queue processing', keys[0])
-    Object.assign(item, { processing: true })
-    processPayout(item)
-  } else {
-    log('Queue empty')
+const Memos = config?.memo
+  ? {
+    Memos: [
+      {
+        Memo: {
+          MemoData: Buffer.from(String(config.memo).trim(), 'utf8').toString('hex').toUpperCase()
+        }
+      }
+    ]
   }
+  : {}
+
+let processing = false
+let claimCount = 0
+
+setInterval(async ()  => {
+  let xrpl
+
+  try {
+    log('Process?')
+
+    if (!processing) {
+      log('Yes, process, not yet processing...')
+      processing = true
+
+      const keys = Object.keys(queue).filter(q => typeof queue[q].processing === 'undefined')
+      log('Processing queue')
+
+      if (keys.length > 0) {
+        log('Processing, queue length', keys.length)
+        log('Connecting <PROCESSING>')
+
+        xrpl = await new XrplClient(config?.node || 'wss://xrplcluster.com', {
+          assumeOfflineAfterSeconds: 20,
+          maxConnectionAttempts: 4,
+          connectAttemptTimeoutSeconds: 4,
+        })
+    
+        xrpl.on('clusterinfo', i => log(`Connected to FH server: ${i.preferredServer}`))
+
+        // 7. Check if the faucet account has enough funds (and fetch some data for the TX)
+        const faucetAccountInfo = await xrpl.send({ command: 'account_info', account: config.account })
+        const faucetLineBalance = await xrpl.send({ command: 'gateway_balances', account: config.account })
+
+        assert(Object.keys(faucetLineBalance?.assets || {}).indexOf(config.issuer) > -1, `Faucet account doesn't hold tokens by issuer ${config.issuer}`)
+        const assetFaucet = faucetLineBalance.assets[config.issuer].filter(a => a.currency === config.token)
+        assert(assetFaucet.length === 1, `Faucet account doesn't hold token ${config.token} by issuer ${config.issuer}`)
+
+        const faucetBalance = Number(assetFaucet[0].value)
+        log('faucetBalance', faucetBalance)
+        
+        xrpl.on('online', () => {
+          log('XRPL connection ready',
+            xrpl.getState().server.uri,
+            xrpl.getState().server.publicKey
+          )
+        })
+    
+        xrpl.on('close', () => {
+          log('XRPL connection closed')
+        })
+
+        log('Waiting for XPRL connection to be fully ready')
+        await xrpl.ready()
+        log('XRPL connection Ready <PROCESSING>')
+
+        const keysToProcess = keys.slice(0, Number(config?.txsperledger || 5))
+        await Promise.all(keysToProcess.map(async (k, i) => {
+          const item = queue[k]
+          Object.assign(item, { processing: true })
+          log('Queue processing', k)
+
+          await processPayout(k, item, xrpl, faucetAccountInfo?.account_data?.Sequence + i, Memos)
+          log('Done processing', k)
+
+          return
+        }))
+
+        processing = false
+        log('Done processing (OVERALL)')
+      } else {
+        log('Queue empty')
+      }
+    } else {
+      log('Skip processing, still processing!')
+    }
+  } catch (e) {
+    log('Processing interval error', e?.message, e)
+  }
+
+  if (typeof xrpl !== 'undefined') {
+    log('Closing... <PROCESSING>')
+    await xrpl.ready()
+    xrpl.close()
+    log('Closed <PROCESSING>')
+    xrpl = undefined
+  }
+
+  processing = false
 }, Number(config?.secperqueueprocess || 9) * 1000)
 
-const processPayout = async (queueItem) => {
-  let xrpl
+const processPayout = async (k, queueItem, xrpl, Sequence, Memos) => {
+  Object.assign(queueItem, { processing: true })
+
   const { account, amount, verbose } = queueItem
 
   Object.assign(recent, { [account]: verbose })
@@ -46,58 +133,12 @@ const processPayout = async (queueItem) => {
   const forcedClearTimeout = setTimeout(() => {
     if (Object.keys(queue).indexOf(account) > -1) {
       log('Force cleanup payout to ', account)
-      delete queue[account]
+      delete queue[k]
     }
   }, 60 * 1000)
 
   try {
-
-    xrpl = await new XrplClient(config?.node || 'wss://xrplcluster.com', {
-      assumeOfflineAfterSeconds: 20,
-      maxConnectionAttempts: 4,
-      connectAttemptTimeoutSeconds: 4,
-    })
-
-    xrpl.on('clusterinfo', i => log(`Connected to FH server: ${i.preferredServer}`))
-    
-    xrpl.on('online', () => {
-      log('XRPL connection ready',
-        xrpl.getState().server.uri,
-        xrpl.getState().server.publicKey
-      )
-    })
-
-    xrpl.on('close', () => {
-      log('XRPL connection closed')
-    })
-
-    // 7. Check if the faucet account has enough funds (and fetch some data for the TX)
-    const faucetAccountInfo = await xrpl.send({ command: 'account_info', account: config.account })
-    const faucetLineBalance = await xrpl.send({ command: 'gateway_balances', account: config.account })
-
-    assert(Object.keys(faucetLineBalance?.assets || {}).indexOf(config.issuer) > -1, `Faucet account doesn't hold tokens by issuer ${config.issuer}`)
-    const assetFaucet = faucetLineBalance.assets[config.issuer].filter(a => a.currency === config.token)
-    assert(assetFaucet.length === 1, `Faucet account doesn't hold token ${config.token} by issuer ${config.issuer}`)
-
-    const faucetBalance = Number(assetFaucet[0].value)
-
-    Object.assign(verbose.faucet, { balance: faucetBalance, sequence: faucetAccountInfo?.account_data?.Sequence })
-
-    const Memos = config?.memo
-      ? {
-        Memos: [
-          {
-            Memo: {
-              MemoData: Buffer.from(String(config.memo).trim(), 'utf8').toString('hex').toUpperCase()
-            }
-          }
-        ]
-      }
-      : {}
-
-    // 8. Compose & sign a transaction
-    await xrpl.ready()
-    // We need to wait so we know the last ledger
+    Object.assign(verbose.faucet, { Sequence })
 
     const transaction = {
       TransactionType: 'Payment',
@@ -109,7 +150,7 @@ const processPayout = async (queueItem) => {
         value: String(amount)
       },
       Fee: String(Math.min(config?.feedrops || 20, 1000)),
-      Sequence: faucetAccountInfo?.account_data?.Sequence,
+      Sequence,
       LastLedgerSequence: xrpl.getState().ledger.last + Number(config?.maxledgers || 10),
       ...Memos
     }
@@ -133,31 +174,36 @@ const processPayout = async (queueItem) => {
     log(e.message)
   }
 
-  if (typeof xrpl !== 'undefined') {
-    log('Closing...')
-    await xrpl.ready()
-    xrpl.close()
-    log('Closed')
+  // if (typeof xrpl !== 'undefined') {
+  //   log('Closing...')
+  //   await xrpl.ready()
+  //   xrpl.close()
+  //   log('Closed')
 
-    delete queue[account]
-    clearTimeout(forcedClearTimeout)
-    xrpl = undefined
-  }
+  //   delete queue[account]
+  //   clearTimeout(forcedClearTimeout)
+  //   xrpl = undefined
+  // }
+
+  log('>>> Done processing queued account', account, k)
+  delete queue[k]
+  clearTimeout(forcedClearTimeout)
 
   return
 }
 
 const main = async () => {
   app.get('/:account(r[a-zA-Z0-9]{16,})/:amount([0-9.]{1,})', async (req, res) => {
+    claimCount++
+
     let xrpl
+    const account = req.params.account
+    const amount = Number(req.params.amount)
 
     try {
-      const account = req.params.account
-      const amount = Number(req.params.amount)
-
       assert(Object.keys(recent).indexOf(account) < 0, `This account has recently received (or attempted to receive) ${config.token}. Please wait.`)
 
-      log('Connecting to the XRPL...')
+      log('Connecting to the XRPL... <' + account + '>')
 
       xrpl = await new XrplClient(config?.node || 'wss://xrplcluster.com', {
         assumeOfflineAfterSeconds: 20,
@@ -168,7 +214,7 @@ const main = async () => {
       xrpl.on('clusterinfo', i => log(`Connected to FH server: ${i.preferredServer}`))
     
       xrpl.on('online', () => {
-        log('XRPL connection ready',
+        log('XRPL connection ready <' + account + '>',
           xrpl.getState().server.uri,
           xrpl.getState().server.publicKey
         )
@@ -221,16 +267,16 @@ const main = async () => {
       // Answer the Web Client
       res.json(verbose)
       
-      Object.assign(queue, { [account]: { account, amount, verbose } })
+      Object.assign(queue, { [account + '_' + claimCount]: { account, amount, verbose } })
     } catch (e) {
       res.json({ error: e.message })
     }
 
     if (typeof xrpl !== 'undefined') {
-      log('Closing...')
+      log('Closing... <' + account + '>')
       await xrpl.ready()
       xrpl.close()
-      log('Closed')
+      log('Closed <' + account + '>')
       xrpl = undefined
     }
 
@@ -243,6 +289,14 @@ const main = async () => {
 
   app.get('/queue', async (req, res) => {
     res.json(queue)
+  })
+
+  app.get('/queue/length', async (req, res) => {
+    res.json({
+      queued: Object.keys(queue).length,
+      claimCount,
+      processing
+    })
   })
       
   log('Listening at :3000')
