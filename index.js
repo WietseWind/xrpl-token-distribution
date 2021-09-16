@@ -115,18 +115,18 @@ setInterval(async ()  => {
   }
 
   processing = false
-}, Number(config?.secperqueueprocess || 9) * 1000)
+}, Number(config?.secperqueueprocess || 15) * 1000)
 
 const processPayout = async (k, queueItem, xrpl, Sequence, Memos) => {
   Object.assign(queueItem, { processing: true })
 
   const { account, amount, verbose } = queueItem
 
-  Object.assign(recent, { [account]: verbose })
+  Object.assign(recent, { [k]: verbose })
 
   setTimeout(() => {
-    if (Object.keys(recent).indexOf(account) > -1) {
-      delete recent[account]
+    if (Object.keys(recent).indexOf(k) > -1) {
+      delete recent[k]
     }
   }, Number(config?.localtxttl || 60) * 1000)
 
@@ -165,8 +165,8 @@ const processPayout = async (k, queueItem, xrpl, Sequence, Memos) => {
     logReq('Submitting transaction', signed.id)
     const submit = await xrpl.send({ command: 'submit', tx_blob: signed.signedTransaction })
 
-    if (Object.keys(recent).indexOf(account) > -1) {
-      Object.assign(recent[account], { submit })
+    if (Object.keys(recent).indexOf(k) > -1) {
+      Object.assign(recent[k], { submit })
     }
 
     logReq('TX Submit response', signed.id, submit)
@@ -201,7 +201,7 @@ const main = async () => {
     const amount = Number(req.params.amount)
 
     try {
-      assert(Object.keys(recent).indexOf(account) < 0, `This account has recently received (or attempted to receive) ${config.token}. Please wait.`)
+      assert(Object.keys(recent).map(r => r.split('_')[0]).indexOf(account) < 0, `This account has recently received (or attempted to receive) ${config.token}. Please wait.`)
 
       log('Connecting to the XRPL... <' + account + '>')
 
@@ -292,10 +292,12 @@ const main = async () => {
   })
 
   app.get('/queue/length', async (req, res) => {
+    const queueCount = Object.keys(queue).length
     res.json({
-      queued: Object.keys(queue).length,
+      queueCount,
       claimCount,
-      processing
+      processing,
+      queueMinutes: queueCount / Number(config?.txsperledger || 5) * Number(config?.secperqueueprocess || 15)
     })
   })
       

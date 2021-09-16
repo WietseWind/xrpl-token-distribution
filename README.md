@@ -33,7 +33,7 @@ The following options are available:
   The amount of drops transaction fee
 - `localtxttl=60` (default: 60)  
   The amount of seconds the same destination account cannot claim any more
-- `secperqueueprocess=9` (default: 9)  
+- `secperqueueprocess=15` (default: 15)
   The seconds between processing a queued payout
 - `txsperledger=5` (default: 5)  
   The amount of transactions to include (max) from the queue in one ledger
