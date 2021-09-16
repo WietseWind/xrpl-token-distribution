@@ -297,7 +297,7 @@ const main = async () => {
       queueCount,
       claimCount,
       processing,
-      queueMinutes: queueCount / Number(config?.txsperledger || 5) * Number(config?.secperqueueprocess || 15)
+      queueMinutes: Math.round(queueCount / Number(config?.txsperledger || 5) * Number(config?.secperqueueprocess || 15) / 60)
     })
   })
       
